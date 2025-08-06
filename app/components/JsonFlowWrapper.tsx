@@ -6,12 +6,13 @@ import JsonFlowVisualizer from './JsonFlowVisualizer';
 
 interface JsonFlowWrapperProps {
   data: any;
+  onDataChange: (newData: any) => void;
 }
 
-const JsonFlowWrapper: React.FC<JsonFlowWrapperProps> = ({ data }) => {
+const JsonFlowWrapper: React.FC<JsonFlowWrapperProps> = ({ data, onDataChange }) => {
   return (
     <ReactFlowProvider>
-      <JsonFlowVisualizer data={data} />
+      <JsonFlowVisualizer data={data} onDataChange={onDataChange} />
     </ReactFlowProvider>
   );
 };

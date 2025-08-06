@@ -7,6 +7,7 @@ export default function Home() {
   const [jsonInput, setJsonInput] = useState('');
   const [jsonData, setJsonData] = useState<any>(null);
   const [error, setError] = useState<string>('');
+  const [isUpdatingFromGraph, setIsUpdatingFromGraph] = useState(false);
 
   const handleJsonChange = (value: string) => {
     setJsonInput(value);
@@ -24,6 +25,15 @@ export default function Home() {
       setError('Invalid JSON format');
       setJsonData(null);
     }
+  };
+
+  const handleGraphDataChange = (newData: any) => {
+    setIsUpdatingFromGraph(true);
+    setJsonData(newData);
+    const formatted = JSON.stringify(newData, null, 2);
+    setJsonInput(formatted);
+    setError('');
+    setTimeout(() => setIsUpdatingFromGraph(false), 100);
   };
 
   const sampleJson = JSON.stringify({
@@ -78,7 +88,7 @@ export default function Home() {
         
         <div className="flex-1 bg-gray-900">
           {jsonData ? (
-            <JsonFlowWrapper data={jsonData} />
+            <JsonFlowWrapper data={jsonData} onDataChange={handleGraphDataChange} />
           ) : (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
