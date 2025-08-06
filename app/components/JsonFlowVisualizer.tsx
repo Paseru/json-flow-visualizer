@@ -67,137 +67,134 @@ const CustomNode = ({ data, id }: NodeProps<JsonNodeData>) => {
       
       if (!targetNode) return;
       
-      // Handle the transformation
+      // Calculate all changes in advance
       let nodeCounter = Math.max(...currentNodes.map(n => parseInt(n.id.replace('node_', '')) || 0)) + 1;
+      let newNodes = [...currentNodes];
       let newEdges = [...currentEdges];
-      let nodesToAdd: Node[] = [];
-      let nodeIdsToRemove: string[] = [];
       
-      setNodes((nodes) => {
-        return nodes.map((node) => {
-          if (node.id === id) {
-            let updatedProperties = [...(node.data.properties || [])];
-            
-            // When converting object to array, create child nodes for simple properties
-            if (newContainerType === 'array' && data.containerType === 'object') {
-              if (node.data.properties && node.data.properties.length > 0) {
-                // Create child nodes for each simple property
-                node.data.properties.forEach((prop, index) => {
-                  const newNodeId = `node_${nodeCounter++}`;
-                  const newChildNode = {
-                    id: newNodeId,
-                    type: 'custom' as const,
-                    position: { 
-                      x: node.position.x + (index - (node.data.properties!.length - 1) / 2) * 250, 
-                      y: node.position.y + 150 
-                    },
-                    data: {
-                      label: `[${childEdges.length + index}]`,
-                      properties: [],
-                      type: prop.type,
-                      rawValue: prop.value,
-                      isContainer: false,
-                      nodeKey: `[${childEdges.length + index}]`,
-                    } as JsonNodeData,
-                  };
-                  
-                  nodesToAdd.push(newChildNode);
-                  
-                  // Create edge to connect the new child
-                  const newEdge = {
-                    id: `e${id}-${newNodeId}`,
-                    source: id,
-                    target: newNodeId,
-                    animated: true,
-                    style: { stroke: '#94a3b8', strokeWidth: 2 },
-                    markerEnd: {
-                      type: MarkerType.ArrowClosed,
-                      color: '#94a3b8',
-                    },
-                  };
-                  
-                  newEdges.push(newEdge);
-                });
-                
-                // Clear the properties from parent node since they're now child nodes
-                updatedProperties = [];
-              }
-            }
-            
-            // When converting array to object, convert simple child nodes back to properties
-            if (newContainerType === 'object' && data.containerType === 'array') {
-              const simpleChildNodes = nodes.filter(n => 
-                childEdges.some(e => e.target === n.id) && 
-                !n.data.isContainer && 
-                (!n.data.properties || n.data.properties.length === 0)
-              );
-              
-              simpleChildNodes.forEach(childNode => {
-                const childKey = childNode.data.nodeKey?.replace(/^\[(\d+)\]$/, 'item_$1') || 'item';
-                updatedProperties.push({
-                  key: childKey,
-                  value: childNode.data.rawValue,
-                  type: childNode.data.type
-                });
-                
-                // Mark node for removal
-                nodeIdsToRemove.push(childNode.id);
-                // Remove edges to this node
-                newEdges = newEdges.filter(e => e.target !== childNode.id);
-              });
-            }
-            
-            return {
-              ...node,
+      // Transform the target node and handle properties
+      const targetNodeIndex = newNodes.findIndex(n => n.id === id);
+      if (targetNodeIndex === -1) return;
+      
+      let updatedProperties = [...(targetNode.data.properties || [])];
+      
+      // When converting object to array, create child nodes for simple properties
+      if (newContainerType === 'array' && data.containerType === 'object') {
+        if (targetNode.data.properties && targetNode.data.properties.length > 0) {
+          // Create child nodes for each simple property
+          targetNode.data.properties.forEach((prop, index) => {
+            const newNodeId = `node_${nodeCounter++}`;
+            const newChildNode: Node = {
+              id: newNodeId,
+              type: 'custom',
+              position: { 
+                x: targetNode.position.x + (index - (targetNode.data.properties!.length - 1) / 2) * 250, 
+                y: targetNode.position.y + 150 
+              },
               data: {
-                ...node.data,
-                containerType: newContainerType,
-                type: newContainerType,
-                properties: updatedProperties,
+                label: `[${childEdges.length + index}]`,
+                properties: [],
+                type: prop.type,
+                rawValue: prop.value,
+                isContainer: false,
+                nodeKey: `[${childEdges.length + index}]`,
+              } as JsonNodeData,
+            };
+            
+            // Add the new node
+            newNodes.push(newChildNode);
+            
+            // Create edge to connect the new child
+            const newEdge = {
+              id: `e${id}-${newNodeId}`,
+              source: id,
+              target: newNodeId,
+              animated: true,
+              style: { stroke: '#94a3b8', strokeWidth: 2 },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: '#94a3b8',
               },
             };
-          }
-          
-          // Update existing child nodes with appropriate keys
-          const isChild = childEdges.some(edge => edge.target === node.id);
-          if (isChild && node.data.isContainer) {
-            const childData = node.data as JsonNodeData;
-            let newKey = childData.nodeKey || childData.label;
             
-            if (newContainerType === 'object' && data.containerType === 'array') {
-              // Converting array to object: [0] -> item_0, [1] -> item_1, etc.
-              if (childData.nodeKey && childData.nodeKey.match(/^\[\d+\]$/)) {
-                const index = childData.nodeKey.match(/\[(\d+)\]/)?.[1] || '0';
-                newKey = `item_${index}`;
-              }
-            } else if (newContainerType === 'array' && data.containerType === 'object') {
-              // Converting object to array: any_key -> [index]
-              if (childData.nodeKey && !childData.nodeKey.match(/^\[\d+\]$/)) {
-                const childIndex = childEdges.findIndex(edge => edge.target === node.id);
-                newKey = `[${childIndex}]`;
-              }
-            }
-            
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                nodeKey: newKey,
-                label: newKey
-              }
-            };
-          }
+            newEdges.push(newEdge);
+          });
           
-          return node;
-        }).filter(node => !nodeIdsToRemove.includes(node.id));
-      });
-      
-      // Add new nodes if any
-      if (nodesToAdd.length > 0) {
-        setNodes(nodes => [...nodes, ...nodesToAdd]);
+          // Clear the properties from parent node since they're now child nodes
+          updatedProperties = [];
+        }
       }
       
-      // Update edges
+      // When converting array to object, convert simple child nodes back to properties
+      if (newContainerType === 'object' && data.containerType === 'array') {
+        const simpleChildNodes = newNodes.filter(n => 
+          childEdges.some(e => e.target === n.id) && 
+          !n.data.isContainer && 
+          (!n.data.properties || n.data.properties.length === 0)
+        );
+        
+        simpleChildNodes.forEach(childNode => {
+          const childKey = childNode.data.nodeKey?.replace(/^\[(\d+)\]$/, 'item_$1') || 'item';
+          updatedProperties.push({
+            key: childKey,
+            value: childNode.data.rawValue,
+            type: childNode.data.type
+          });
+          
+          // Remove the child node
+          newNodes = newNodes.filter(n => n.id !== childNode.id);
+          // Remove edges to this node
+          newEdges = newEdges.filter(e => e.target !== childNode.id);
+        });
+      }
+      
+      // Update the target node with new container type and properties
+      newNodes[targetNodeIndex] = {
+        ...newNodes[targetNodeIndex],
+        data: {
+          ...newNodes[targetNodeIndex].data,
+          containerType: newContainerType,
+          type: newContainerType,
+          properties: updatedProperties,
+        },
+      };
+      
+      // Update existing child container nodes with appropriate keys
+      newNodes = newNodes.map(node => {
+        const isChild = childEdges.some(edge => edge.target === node.id);
+        if (isChild && node.data.isContainer) {
+          const childData = node.data as JsonNodeData;
+          let newKey = childData.nodeKey || childData.label;
+          
+          if (newContainerType === 'object' && data.containerType === 'array') {
+            // Converting array to object: [0] -> item_0, [1] -> item_1, etc.
+            if (childData.nodeKey && childData.nodeKey.match(/^\[\d+\]$/)) {
+              const index = childData.nodeKey.match(/\[(\d+)\]/)?.[1] || '0';
+              newKey = `item_${index}`;
+            }
+          } else if (newContainerType === 'array' && data.containerType === 'object') {
+            // Converting object to array: any_key -> [index]
+            if (childData.nodeKey && !childData.nodeKey.match(/^\[\d+\]$/)) {
+              const childIndex = childEdges.findIndex(edge => edge.target === node.id);
+              newKey = `[${childIndex}]`;
+            }
+          }
+          
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              nodeKey: newKey,
+              label: newKey
+            }
+          };
+        }
+        
+        return node;
+      });
+      
+      // Apply all changes atomically
+      setNodes(newNodes);
       setEdges(newEdges);
     }
   };
