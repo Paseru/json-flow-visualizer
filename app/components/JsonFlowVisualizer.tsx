@@ -44,7 +44,7 @@ const getNodeColor = (type: string) => {
 };
 
 const CustomNode = ({ data, id }: NodeProps<JsonNodeData>) => {
-  const { setNodes } = useReactFlow();
+  const { setNodes, getNodes, getEdges } = useReactFlow();
   
   const formatValue = (value: any, type: string): string => {
     if (type === 'string') return `"${value}"`;
@@ -57,21 +57,60 @@ const CustomNode = ({ data, id }: NodeProps<JsonNodeData>) => {
 
   const toggleContainerType = () => {
     if (data.isContainer) {
-      setNodes((nodes) =>
-        nodes.map((node) => {
+      const currentNodes = getNodes();
+      const currentEdges = getEdges();
+      const newContainerType = data.containerType === 'array' ? 'object' : 'array';
+      
+      // Find all child edges and nodes
+      const childEdges = currentEdges.filter(edge => edge.source === id);
+      
+      setNodes((nodes) => {
+        return nodes.map((node) => {
+          // Update the main container node
           if (node.id === id) {
             return {
               ...node,
               data: {
                 ...node.data,
-                containerType: node.data.containerType === 'array' ? 'object' : 'array',
-                type: node.data.containerType === 'array' ? 'object' : 'array',
+                containerType: newContainerType,
+                type: newContainerType,
               },
             };
           }
+          
+          // Update child nodes with appropriate keys
+          const isChild = childEdges.some(edge => edge.target === node.id);
+          if (isChild) {
+            const childData = node.data as JsonNodeData;
+            let newKey = childData.nodeKey || childData.label;
+            
+            if (newContainerType === 'object' && data.containerType === 'array') {
+              // Converting array to object: [0] -> item_0, [1] -> item_1, etc.
+              if (childData.nodeKey && childData.nodeKey.match(/^\[\d+\]$/)) {
+                const index = childData.nodeKey.match(/\[(\d+)\]/)?.[1] || '0';
+                newKey = `item_${index}`;
+              }
+            } else if (newContainerType === 'array' && data.containerType === 'object') {
+              // Converting object to array: any_key -> [index]
+              if (childData.nodeKey && !childData.nodeKey.match(/^\[\d+\]$/)) {
+                const childIndex = childEdges.findIndex(edge => edge.target === node.id);
+                newKey = `[${childIndex}]`;
+              }
+            }
+            
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                nodeKey: newKey,
+                label: newKey
+              }
+            };
+          }
+          
           return node;
-        })
-      );
+        });
+      });
     }
   };
 
